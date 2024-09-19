@@ -5,6 +5,8 @@
 #include <ws2tcpip.h>
 #include <cstdint>
 #include <cstdio>
+#include <thread>
+#include <chrono>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -118,6 +120,9 @@ int main() {
         // Clears the buffer
         memset(buffer, 0, BUFFER_SIZE);
         strcpy(buffer, "Image Received");
+
+        // Delay on client side to buffer image transmission
+        std::this_thread::sleep_for(std::chrono::seconds(5));
 
         // Sends acknowledgement
         if (send(client_socket, buffer, strlen(buffer), 0) < 0) {

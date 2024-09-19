@@ -40,7 +40,7 @@ void client_thread(SOCKET client_socket) {
     ack = "Server ACK. Beginning Stream";
 
     if(send(client_socket, ack.c_str(), ack.length(), 0)) {
-        std::cout << "Sending acknowledgement for stream start";
+        std::cout << "Sending acknowledgement for stream start" << std::endl;
     }
 
     while (true) { 
