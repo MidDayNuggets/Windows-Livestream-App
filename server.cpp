@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <cstdio>
+#include "screencapture.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -20,40 +21,46 @@ int active_threads = 0;
 
 void client_thread(SOCKET client_socket) {
     char buffer[BUFFER_SIZE] = {0};
+    std::string ack;
 
-    while (true) {
+    // Receives information from the client
+    int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
+
+    // Checks if the information is valid
+    if (bytes_received == SOCKET_ERROR) {
+        std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+        return;
+    } else if (strcmp(buffer, "exit") == 0) {
+        std::cout << "Client has chosen to quit" << std::endl;
+        return;
+    } else if (strcmp(buffer, "start") == 0) {
+        std::cout << "Client has chosen to start" << std::endl;
+    }   
+
+    ack = "Server ACK. Beginning Stream";
+
+    if(send(client_socket, ack.c_str(), ack.length(), 0)) {
+        std::cout << "Sending acknowledgement for stream start";
+    }
+
+    while (true) { 
         // Clears the buffer
         memset(buffer, 0, BUFFER_SIZE);
 
-        // Receives information from the client
-        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
-
-        // Checks if the information is valid
-        if (bytes_received == SOCKET_ERROR) {
-            std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
-            break;
-        } else if (strcmp(buffer, "exit") == 0) {
-            std::cout << "Client has chosen to quit" << std::endl;
-            break;
+        if(recv(client_socket, buffer, BUFFER_SIZE, 0)) {
+            std::cout << buffer << std::endl;
         }
 
-        // Null terminates the buffer
-        buffer[bytes_received] = '\0';
-
-        // Displays the message from the client
+        // Take screenshot to generate screen.jpeg
         {
             std::lock_guard<std::mutex> lock(mtx);
-            std::cout << "Received from client: " << buffer << std::endl;
-        }
-
-        // Constructs the file path by concatenating FILEPATH and image file name
-        char file_path[BUFFER_SIZE];
-        snprintf(file_path, BUFFER_SIZE, "%s%s", FILEPATH, buffer);
+            getScreen();
+        } 
 
         // Opens the image file for reading
-        FILE *image_file = fopen(file_path, "rb");
+        FILE *image_file = fopen("server_images/screen.jpeg", "rb");
         if (!image_file) {
-            std::cerr << "Error opening image file: " << file_path << std::endl;
+            std::cerr << "Error opening image file: screen.jpeg" << std::endl;
             break;
         }
 

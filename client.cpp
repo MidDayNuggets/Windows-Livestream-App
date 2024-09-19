@@ -8,10 +8,10 @@
 
 #pragma comment(lib, "Ws2_32.lib")
 
-#define SERVER_IP "192.168.86.37"  // Defines a local IP
+#define SERVER_IP "192.168.2.25"  // Defines a local IP
 #define PORT 49153                   // Defines the port number    
 #define BUFFER_SIZE 1024             // Defines the max buffer size
-#define FILE_PATH "requested_images/" // Defines the path to the directory where images will be saved
+#define FILE_PATH "requested_images/screen.jpeg" // Defines the path to the directory where images will be saved
 
 int main() {
     WSADATA wsa;
@@ -20,7 +20,7 @@ int main() {
     char buffer[BUFFER_SIZE] = {0};
     std::string cmd = "start requested_images/";
     std::string temp = "start requested_images/";
-    std::string image_name;
+    std::string response;
 
     // Attempts to initialize WSA
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
@@ -48,27 +48,27 @@ int main() {
     // Displays that it connected to the server
     std::cout << "Connected to server" << std::endl;
 
+    // Allows the user to send strings of text
+    std::cout << "Do you wish to start the stream? (type 'start to start and 'exit' to quit): ";
+    std::getline(std::cin, response);
+
+    // Send the message to the server
+    if (send(client_socket, response.c_str(), response.length(), 0) < 0) {
+        std::cerr << "Send failed. Error Code: " << WSAGetLastError() << std::endl;
+    }
+
+    if(recv(client_socket, buffer, BUFFER_SIZE, 0)) {
+        std::cout << buffer << std::endl;
+    }
+
     while (true) {
-        // Clears the buffer
-        memset(buffer, 0, sizeof(buffer));
-
-        // Allows the user to send strings of text
-        std::cout << "Enter name of the image you want to receive (type 'exit' to quit): ";
-        std::getline(std::cin, image_name);
-
-        // Checks if the user entered 'exit'
-        if (image_name == "exit") {
-            break;
-        }
-
-        // Send the message to the server
-        if (send(client_socket, image_name.c_str(), image_name.length(), 0) < 0) {
-            std::cerr << "Send failed. Error Code: " << WSAGetLastError() << std::endl;
-            break;
+        response = "Client is ready";
+        if (send(client_socket, response.c_str(), response.length(), 0) < 0) {
+            std::cerr << "Send failed. Error Code: " << WSAGetLastError() << std::endl; 
         }
 
         // Constructs the file path to where the received image will be stored
-        std::string file_path = FILE_PATH + image_name;
+        std::string file_path = FILE_PATH;
 
         // Opens a file to save the received image
         FILE* image_file = fopen(file_path.c_str(), "wb");
@@ -110,11 +110,10 @@ int main() {
 
         fclose(image_file);
         std::cout << "Image received and saved. Opening Image..." << std::endl;
-        system((cmd + image_name).c_str());
+        system((cmd + "screen.jpeg").c_str());
 
         // Resets strings
         cmd = temp;
-        image_name.clear();
 
         // Clears the buffer
         memset(buffer, 0, BUFFER_SIZE);
