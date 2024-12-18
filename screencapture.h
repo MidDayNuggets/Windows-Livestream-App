@@ -6,6 +6,7 @@
 #include <string>
 #include <mutex>
 
-void getScreen();
+int GetEncoderClsid(const WCHAR* format, CLSID* pClsid);
+IStream* captureScreenToStream();
 
-#endif 
+#endif

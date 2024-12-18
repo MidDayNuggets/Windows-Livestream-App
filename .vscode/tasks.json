@@ -1,39 +1,59 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-      {
-        "label": "Build wxWidgets App",
-        "type": "shell",
-        "command": "g++",
-        "args": [
-          "-I${env:WXWIN}/include",
-          "-I${env:WXWIN}/lib/gcc_dll/mswu",
-          "-L${env:WXWIN}/lib/gcc_dll",
-          "-o",
-          "app.exe",
-          "main.cpp",
-          "-lwxmsw32u_core",
-          "-lwxbase32u",
-          "-lgdi32",
-          "-lole32",
-          "-luuid",
-          "-lcomctl32",
-          "-lcomdlg32",
-          "-lwinspool",
-          "-lwinmm",
-          "-lshell32",
-          "-lshlwapi",
-          "-lversion",
-          "-lrpcrt4",
-          "-lws2_32"
-        ],
-        "group": {
-          "kind": "build",
-          "isDefault": true
-        },
-        "problemMatcher": ["$gcc"],
-        "detail": "Compile and link wxWidgets program"
-      }
-    ]
-  }
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Client App",
+      "type": "shell",
+      "command": "g++",
+      "args": [
+        "-I${env:WXWIN}/include",
+        "-I${env:WXWIN}/lib/gcc_dll/mswu",
+        "-L${env:WXWIN}/lib/gcc_dll",
+        "-o",
+        "client.exe",
+        "client.cpp",
+        "-lwxmsw32u_core",
+        "-lwxbase32u",
+        "-lgdi32",
+        "-lole32",
+        "-luuid",
+        "-lcomctl32",
+        "-lcomdlg32",
+        "-lwinspool",
+        "-lwinmm",
+        "-lshell32",
+        "-lshlwapi",
+        "-lversion",
+        "-lrpcrt4",
+        "-lws2_32",
+        "-pthread",
+        "-std=c++17"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build Server",
+      "type": "shell",
+      "command": "g++",
+      "args": [
+        "server.cpp",
+        "screencapture.cpp",
+        "-o",
+        "server.exe",
+        "-lgdi32",
+        "-lgdiplus",
+        "-lole32",
+        "-lws2_32",
+        "-pthread",
+        "-std=c++17"
+      ],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}
   

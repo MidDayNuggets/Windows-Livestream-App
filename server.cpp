@@ -8,124 +8,90 @@
 #include <vector>
 #include <memory>
 #include <cstdio>
+#include <gdiplus.h>
+#include <atomic> 
+#include <algorithm>
 #include "screencapture.h"
 
 #pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "gdiplus.lib")
 
-#define PORT 49153                 // Defines the port number    
-#define BUFFER_SIZE 1024           // Defines the max buffer size
-#define FILEPATH "server_images/"  // Path to image directory
+#define PORT 49153
+#define BUFFER_SIZE 4096  
+#define MAX_CLIENTS 3
 
 std::mutex mtx;
-int active_threads = 0;
+std::atomic<int> active_threads{0};
 
 void client_thread(SOCKET client_socket) {
     char buffer[BUFFER_SIZE] = {0};
-    std::string ack;
 
-    // Receives information from the client
     int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
-
-    // Checks if the information is valid
-    if (bytes_received == SOCKET_ERROR) {
-        std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+    if (bytes_received == SOCKET_ERROR || strcmp(buffer, "start") != 0) {
         return;
-    } else if (strcmp(buffer, "exit") == 0) {
-        std::cout << "Client has chosen to quit" << std::endl;
-        return;
-    } else if (strcmp(buffer, "start") == 0) {
-        std::cout << "Client has chosen to start" << std::endl;
-    }   
-
-    ack = "Server ACK. Beginning Stream";
-
-    if(send(client_socket, ack.c_str(), ack.length(), 0)) {
-        std::cout << "Sending acknowledgement for stream start" << std::endl;
     }
 
+    int frames = 0;
+    auto lastTime = std::chrono::steady_clock::now();
     while (true) { 
-        // Clears the buffer
-        memset(buffer, 0, BUFFER_SIZE);
-
-        if(recv(client_socket, buffer, BUFFER_SIZE, 0)) {
-            std::cout << buffer << std::endl;
+        frames++;
+        auto currentTime = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastTime);
+        
+        if (elapsed.count() >= 1) {
+            std::cout << "Server FPS: " << frames << std::endl;
+            frames = 0;
+            lastTime = currentTime;
         }
 
-        // Take screenshot to generate screen.jpeg
+        IStream* imageStream = nullptr;
         {
             std::lock_guard<std::mutex> lock(mtx);
-            getScreen();
-        } 
-
-        // Opens the image file for reading
-        FILE *image_file = fopen("server_images/screen.jpeg", "rb");
-        if (!image_file) {
-            std::cerr << "Error opening image file: screen.jpeg" << std::endl;
-            break;
+            imageStream = captureScreenToStream();
+            if (!imageStream) {
+                std::cerr << "Failed to capture screen" << std::endl;
+                break;
+            }
         }
 
-        // Clears the buffer
-        memset(buffer, 0, BUFFER_SIZE);
+        // Get stream size
+        STATSTG streamStats;
+        imageStream->Stat(&streamStats, STATFLAG_NONAME);
+        uint64_t image_size = streamStats.cbSize.QuadPart; 
 
-        // Handles sending image size to the client
-        if (fseek(image_file, 0, SEEK_END) != 0) {
-            std::cerr << "Seek failed" << std::endl;
-            break;
-        }
-
-        long image_size = ftell(image_file);
-        if (image_size < 0) {
-            std::cerr << "Tell failed" << std::endl;
-            break;
-        }
-
-        rewind(image_file);
-
+        // Send image size
         uint64_t temp_size = htonl(image_size);
-        memcpy(buffer, &temp_size, sizeof(temp_size));
-        send(client_socket, buffer, BUFFER_SIZE, 0);
-
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            std::cout << "Sent image size." << std::endl;
+        int sent_bytes = send(client_socket, reinterpret_cast<char*>(&temp_size), sizeof(temp_size), 0);
+        if (sent_bytes <= 0) {
+            std::cout << "Client disconnected" << std::endl;
+            break;  
         }
+        std::cout << "Sent image size: " << image_size << std::endl;
 
+        // Stream transmission
+        char buffer[BUFFER_SIZE];
         while (image_size > 0) {
-            // Clears the buffer
-            memset(buffer, 0, sizeof(buffer));
-
-            // Reads the image file into the buffer
-            size_t bytes_read = fread(buffer, 1, BUFFER_SIZE, image_file);
-            if (bytes_read == SOCKET_ERROR) {
-                std::cerr << "Read failed. Error code: " << WSAGetLastError() << std::endl;
-                break;
+            size_t bytes_to_read = std::min(image_size, static_cast<uint64_t>(BUFFER_SIZE));
+            ULONG bytesRead;
+            imageStream->Read(buffer, bytes_to_read, &bytesRead);
+            
+            int sent_bytes = send(client_socket, buffer, bytesRead, 0);
+            if (sent_bytes <= 0) {
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    active_threads--;
+                    std::cout << "Client disconnected during transmission" << std::endl;
+                }
+                closesocket(client_socket);
+                return; 
             }
-
-            // Sends the image stored in buffer back to the client
-            if (send(client_socket, buffer, bytes_read, 0) == SOCKET_ERROR) {
-                std::cerr << "Send failed with error code: " << WSAGetLastError() << std::endl;
-                break;
-            }
-
-            image_size -= bytes_read;
+            image_size -= bytesRead;
         }
 
-        std::cout << "Image sent to client" << std::endl;
-        fclose(image_file);
-
-        // Receives acknowledgement from the client
-        memset(buffer, 0, BUFFER_SIZE);
-        if ((recv(client_socket, buffer, BUFFER_SIZE, 0)) < 0) {
-            std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
-            break;
-        } else {
-            std::cout << "Acknowledgement: " << buffer << std::endl;
-        }
+        imageStream->Release();
+        //std::this_thread::sleep_for(std::chrono::milliseconds(33));
     }
-
     closesocket(client_socket);
-
-    // Decrements the active thread counter when the thread finishes
     {
         std::lock_guard<std::mutex> lock(mtx);
         active_threads--;
@@ -133,10 +99,14 @@ void client_thread(SOCKET client_socket) {
 }
 
 int main() {
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken;
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
     WSADATA wsa;
     SOCKET server_socket, client_socket;
     struct sockaddr_in server_addr, client_addr;
     int addr_len = sizeof(client_addr);
+    bool first_connection = true;
     std::vector<std::thread> threads;
 
     // Attempts to initialize WSA
@@ -163,11 +133,14 @@ int main() {
     }
 
     // Listens for incoming connections (max 3)
-    listen(server_socket, 3);
+    listen(server_socket, MAX_CLIENTS);
     std::cout << "Server listening on port " << PORT << std::endl;
 
     while (true) {
-        if (active_threads >= 3) {
+        if ((!first_connection && active_threads <= 0) || active_threads >= MAX_CLIENTS) {
+            std::cout << "Server shutting down: " 
+                  << (active_threads <= 0 ? "No active clients" : "Max clients reached") 
+                  << std::endl;
             break;
         }
 
@@ -177,11 +150,12 @@ int main() {
             return 0;
         }
 
+        first_connection = false;
         std::cout << "Connection accepted on port: " << PORT << std::endl;
 
         // Creates a thread to handle the client
         threads.emplace_back(client_thread, client_socket);
-
+        
         // Increments the active thread counter
         {
             std::lock_guard<std::mutex> lock(mtx);
