@@ -1,5 +1,6 @@
 # Windows-Livestream-App
 COMP-4990 (University of Windsor) "Project Management: Techniques and Tools" Course Project
+Group Members: Raymond Chen and Daniel Chiarcos
 
 # Introduction
 This project aimed to explore the designing and building of a client-server application capable of broadcasting a device’s screen to another in real-time. From the beginning, we committed to developing the entire system from scratch, relying solely on low-level programming languages to gain a deeper understanding of how such applications function at their core. This decision required careful planning and the selection of tools that balanced functionality with performance.
